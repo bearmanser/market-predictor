@@ -5,7 +5,7 @@
   font-weight: 400;
   background:
     radial-gradient(circle at top left, rgba(20, 184, 166, 0.25), transparent 30%),
-    radial-gradient(circle at top right, rgba(59, 130, 246, 0.18), transparent 28%),
+    radial-gradient(circle at top right, rgba(245, 158, 11, 0.16), transparent 28%),
     linear-gradient(180deg, #07111f 0%, #020617 55%, #01030a 100%);
   color: #f8fafc;
   font-synthesis: none;
@@ -48,7 +48,8 @@ select {
 .hero-panel,
 .chart-panel,
 .status-card,
-.stat-card {
+.stat-card,
+.confidence-card {
   background: rgba(15, 23, 42, 0.72);
   border: 1px solid rgba(148, 163, 184, 0.15);
   box-shadow: 0 24px 60px rgba(2, 6, 23, 0.45);
@@ -83,17 +84,43 @@ select {
 }
 
 .hero-text {
-  max-width: 560px;
+  max-width: 620px;
   margin: 18px 0 0;
   color: #cbd5e1;
   font-size: 1.05rem;
 }
 
 .hero-actions {
+  display: grid;
+  align-content: start;
+  gap: 14px;
+  min-width: min(100%, 340px);
+}
+
+.hero-button-row {
   display: flex;
   align-items: flex-start;
   gap: 12px;
   flex-wrap: wrap;
+}
+
+.confidence-card {
+  border-radius: 24px;
+  padding: 18px 20px;
+  display: grid;
+  gap: 10px;
+}
+
+.confidence-card strong {
+  display: block;
+  margin-top: 4px;
+  font-size: 1.15rem;
+}
+
+.confidence-slider {
+  width: 100%;
+  accent-color: #f59e0b;
+  cursor: pointer;
 }
 
 .nav-button {
@@ -126,7 +153,7 @@ select {
 
 .status-row {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
   gap: 16px;
 }
 
@@ -139,7 +166,8 @@ select {
 
 .status-label,
 .stat-card span,
-.chart-note span:last-child {
+.chart-note span:last-child,
+.chart-note span:nth-child(2) {
   color: #94a3b8;
   font-size: 0.92rem;
 }
@@ -165,18 +193,29 @@ select {
   font-size: 0.75rem;
 }
 
-.chart-change {
+.chart-change,
+.chart-subchange {
   margin: 0;
-  font-size: clamp(1.6rem, 3vw, 2.2rem);
   font-weight: 700;
   letter-spacing: -0.03em;
 }
 
-.chart-change.positive {
+.chart-change {
+  font-size: clamp(1.45rem, 3vw, 2rem);
+}
+
+.chart-subchange {
+  font-size: 1rem;
+  margin-top: 6px;
+}
+
+.chart-change.positive,
+.chart-subchange.positive {
   color: #5eead4;
 }
 
-.chart-change.negative {
+.chart-change.negative,
+.chart-subchange.negative {
   color: #fda4af;
 }
 
@@ -194,7 +233,26 @@ select {
 
 .chart-wrap {
   position: relative;
-  min-height: 360px;
+  min-height: 380px;
+}
+
+.chart-tooltip {
+  display: grid;
+  gap: 6px;
+  min-width: 240px;
+  padding: 14px 16px;
+  background: rgba(15, 23, 42, 0.96);
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  border-radius: 16px;
+  box-shadow: 0 20px 45px rgba(2, 6, 23, 0.35);
+}
+
+.chart-tooltip strong {
+  margin-bottom: 2px;
+}
+
+.chart-tooltip span {
+  color: #e2e8f0;
 }
 
 .loading-overlay,
@@ -229,7 +287,7 @@ select {
 
 .stats-grid {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
   gap: 16px;
 }
 
@@ -259,17 +317,7 @@ select {
 
   .hero-panel,
   .chart-header {
-    grid-auto-flow: row;
-  }
-
-  .hero-panel,
-  .chart-header {
     display: grid;
-  }
-
-  .status-row,
-  .stats-grid {
-    grid-template-columns: 1fr;
   }
 
   .chart-note {

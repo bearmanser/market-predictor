@@ -1,3 +1,6 @@
 fastapi==0.116.1
 httpx==0.28.1
 uvicorn==0.35.0
+numpy>=2.2,<3.0
+scikit-learn>=1.5,<1.8
+ngboost>=0.5,<0.6
