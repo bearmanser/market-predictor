@@ -335,6 +335,85 @@ def build_weekly_predictions(
     return predictions, configured_start, effective_training_day, trained_model.sample_count
 
 
+def build_week_points(
+    selected_days: list[date],
+    parsed_series: dict[date, dict[str, str]],
+    weekly_predictions: list[dict[str, float]],
+) -> list[dict[str, Any]]:
+    points: list[dict[str, Any]] = []
+
+    for trading_day, prediction in zip(selected_days, weekly_predictions, strict=True):
+        values_for_day = parsed_series[trading_day]
+        close = float(values_for_day["close"])
+        points.append(
+            {
+                "date": trading_day.isoformat(),
+                "label": trading_day.strftime("%a"),
+                "open": float(values_for_day["open"]),
+                "high": float(values_for_day["high"]),
+                "low": float(values_for_day["low"]),
+                "close": close,
+                "adjustedClose": close,
+                "volume": int(float(values_for_day.get("volume", "0"))),
+                **prediction,
+            }
+        )
+
+    return points
+
+
+def summarize_week(points: list[dict[str, Any]]) -> dict[str, float]:
+    opening_price = points[0]["open"]
+    closing_price = points[-1]["close"]
+    high_price = max(point["high"] for point in points)
+    low_price = min(point["low"] for point in points)
+    change = closing_price - opening_price
+    change_percent = (change / opening_price) * 100 if opening_price else 0.0
+    predicted_close = points[-1]["prediction"]
+    predicted_change = predicted_close - opening_price
+    predicted_change_percent = (predicted_change / opening_price) * 100 if opening_price else 0.0
+
+    return {
+        "open": opening_price,
+        "close": closing_price,
+        "high": high_price,
+        "low": low_price,
+        "change": change,
+        "changePercent": change_percent,
+        "predictedClose": predicted_close,
+        "predictedChange": predicted_change,
+        "predictedChangePercent": predicted_change_percent,
+    }
+
+
+def build_week_snapshot(
+    trading_days: list[date],
+    parsed_series: dict[date, dict[str, str]],
+    close_series: list[float],
+    selected_days: list[date],
+    confidence_level: float,
+) -> dict[str, Any]:
+    weekly_predictions, training_start, training_end, training_sample_count = build_weekly_predictions(
+        trading_days,
+        close_series,
+        selected_days,
+        confidence_level,
+    )
+    points = build_week_points(selected_days, parsed_series, weekly_predictions)
+
+    return {
+        "weekStart": selected_days[0].isoformat(),
+        "weekEnd": selected_days[-1].isoformat(),
+        "trainingWindow": {
+            "configuredStart": training_start.isoformat(),
+            "effectiveEnd": training_end.isoformat(),
+            "sampleCount": training_sample_count,
+        },
+        "summary": summarize_week(points),
+        "points": points,
+    }
+
+
 async def fetch_daily_series() -> dict[str, Any]:
     if not TWELVE_DATA_API_KEY:
         raise HTTPException(status_code=500, detail="Twelve Data API key is not configured.")
@@ -416,50 +495,22 @@ async def get_weekly_sp500_data(
     if week_offset >= len(weekly_groups):
         raise HTTPException(status_code=404, detail="That week is outside the available history.")
 
-    week_start, selected_days = weekly_groups[week_offset]
-    week_end = selected_days[-1]
-    weekly_predictions, training_start, training_end, training_sample_count = build_weekly_predictions(
+    _, selected_days = weekly_groups[week_offset]
+    week_snapshot = build_week_snapshot(
         trading_days,
+        parsed_series,
         close_series,
         selected_days,
         confidence_level,
     )
-    points: list[dict[str, Any]] = []
-
-    for trading_day, prediction in zip(selected_days, weekly_predictions, strict=True):
-        values_for_day = parsed_series[trading_day]
-        close = float(values_for_day["close"])
-        points.append(
-            {
-                "date": trading_day.isoformat(),
-                "label": trading_day.strftime("%a"),
-                "open": float(values_for_day["open"]),
-                "high": float(values_for_day["high"]),
-                "low": float(values_for_day["low"]),
-                "close": close,
-                "adjustedClose": close,
-                "volume": int(float(values_for_day.get("volume", "0"))),
-                **prediction,
-            }
-        )
-
-    opening_price = points[0]["open"]
-    closing_price = points[-1]["close"]
-    high_price = max(point["high"] for point in points)
-    low_price = min(point["low"] for point in points)
-    change = closing_price - opening_price
-    change_percent = (change / opening_price) * 100 if opening_price else 0.0
-    predicted_close = points[-1]["prediction"]
-    predicted_change = predicted_close - opening_price
-    predicted_change_percent = (predicted_change / opening_price) * 100 if opening_price else 0.0
     last_refreshed = trading_days[-1].isoformat() if trading_days else None
 
     return {
         "symbol": TWELVE_DATA_SYMBOL,
         "displayName": TWELVE_DATA_DISPLAY_NAME,
         "weekOffset": week_offset,
-        "weekStart": week_start.isoformat(),
-        "weekEnd": week_end.isoformat(),
+        "weekStart": week_snapshot["weekStart"],
+        "weekEnd": week_snapshot["weekEnd"],
         "availableWeeks": len(weekly_groups),
         "hasPrevious": week_offset < len(weekly_groups) - 1,
         "hasNext": week_offset > 0,
@@ -467,21 +518,130 @@ async def get_weekly_sp500_data(
         "cachedAt": payload.get("fetched_at"),
         "lastRefreshed": last_refreshed,
         "confidenceLevel": confidence_level,
-        "trainingWindow": {
-            "configuredStart": training_start.isoformat(),
-            "effectiveEnd": training_end.isoformat(),
-            "sampleCount": training_sample_count,
-        },
-        "summary": {
-            "open": opening_price,
-            "close": closing_price,
-            "high": high_price,
-            "low": low_price,
-            "change": change,
-            "changePercent": change_percent,
-            "predictedClose": predicted_close,
-            "predictedChange": predicted_change,
-            "predictedChangePercent": predicted_change_percent,
-        },
-        "points": points,
+        "trainingWindow": week_snapshot["trainingWindow"],
+        "summary": week_snapshot["summary"],
+        "points": week_snapshot["points"],
+    }
+
+
+@app.get("/api/sp500/simulator")
+async def get_trader_simulation(
+    weeks_to_simulate: int = Query(default=52, ge=1, le=520),
+    confidence_level: float = Query(default=0.8, gt=0.5, lt=0.999),
+) -> dict[str, Any]:
+    payload = await fetch_daily_series()
+    values = payload["values"]
+    trading_days, parsed_series = parse_daily_series(values)
+    close_series = build_close_series(trading_days, parsed_series)
+    weekly_groups = group_weeks(trading_days)
+
+    if not weekly_groups:
+        raise HTTPException(status_code=404, detail="No trading data is available.")
+
+    if weeks_to_simulate > len(weekly_groups):
+        raise HTTPException(
+            status_code=404,
+            detail=f"Only {len(weekly_groups)} historical trading weeks are available.",
+        )
+
+    selected_groups = list(reversed(weekly_groups[:weeks_to_simulate]))
+    starting_cash = 10_000.0
+    trade_budget = 100.0
+    cash = starting_cash
+    shares_held = 0.0
+    history: list[dict[str, Any]] = []
+    buy_trades = 0
+    sell_trades = 0
+
+    for week_start, selected_days in selected_groups:
+        try:
+            week_snapshot = build_week_snapshot(
+                trading_days,
+                parsed_series,
+                close_series,
+                selected_days,
+                confidence_level,
+            )
+        except HTTPException as exc:
+            if exc.status_code == 422:
+                raise HTTPException(
+                    status_code=422,
+                    detail=(
+                        f"Unable to simulate {weeks_to_simulate} weeks because the week starting "
+                        f"{week_start.isoformat()} does not have enough prior history for the model. "
+                        "Reduce weeks_to_simulate or widen the backend training window."
+                    ),
+                ) from exc
+            raise
+
+        summary = week_snapshot["summary"]
+        opening_price = float(summary["open"])
+        closing_price = float(summary["close"])
+        predicted_close = float(summary["predictedClose"])
+        shares_traded = 0.0
+        trade_value = 0.0
+        action = "hold"
+
+        if predicted_close > opening_price and cash >= trade_budget and opening_price > 0:
+            shares_traded = trade_budget / opening_price
+            trade_value = trade_budget
+            shares_held += shares_traded
+            cash -= trade_value
+            action = "buy"
+            buy_trades += 1
+        elif predicted_close < opening_price and shares_held > 0 and opening_price > 0:
+            trade_value = shares_held * opening_price
+            shares_traded = shares_held
+            cash += trade_value
+            shares_held = 0.0
+            action = "sell"
+            sell_trades += 1
+
+        holdings_value = shares_held * closing_price
+        account_value = cash + holdings_value
+        history.append(
+            {
+                "weekStart": week_snapshot["weekStart"],
+                "weekEnd": week_snapshot["weekEnd"],
+                "label": selected_days[-1].strftime("%b %d"),
+                "action": action,
+                "openingPrice": opening_price,
+                "closingPrice": closing_price,
+                "predictedClose": predicted_close,
+                "tradeValue": trade_value,
+                "sharesTraded": shares_traded,
+                "cash": cash,
+                "sharesHeld": shares_held,
+                "holdingsValue": holdings_value,
+                "accountValue": account_value,
+                "trainingSampleCount": week_snapshot["trainingWindow"]["sampleCount"],
+            }
+        )
+
+    ending_account_value = history[-1]["accountValue"]
+    ending_holdings_value = history[-1]["holdingsValue"]
+    net_profit = ending_account_value - starting_cash
+    net_profit_percent = (net_profit / starting_cash) * 100 if starting_cash else 0.0
+    last_refreshed = trading_days[-1].isoformat() if trading_days else None
+
+    return {
+        "symbol": TWELVE_DATA_SYMBOL,
+        "displayName": TWELVE_DATA_DISPLAY_NAME,
+        "availableWeeks": len(weekly_groups),
+        "weeksRequested": weeks_to_simulate,
+        "weeksSimulated": len(history),
+        "confidenceLevel": confidence_level,
+        "startingCash": starting_cash,
+        "tradeBudget": trade_budget,
+        "endingCash": cash,
+        "endingHoldingsValue": ending_holdings_value,
+        "endingAccountValue": ending_account_value,
+        "netProfit": net_profit,
+        "netProfitPercent": net_profit_percent,
+        "buyTrades": buy_trades,
+        "sellTrades": sell_trades,
+        "cacheStatus": payload.get("cache_status", "unknown"),
+        "cachedAt": payload.get("fetched_at"),
+        "lastRefreshed": last_refreshed,
+        "history": history,
     }

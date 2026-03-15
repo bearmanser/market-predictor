@@ -94,7 +94,7 @@ select {
   display: grid;
   align-content: start;
   gap: 14px;
-  min-width: min(100%, 340px);
+  min-width: min(100%, 360px);
 }
 
 .hero-button-row {
@@ -121,6 +121,36 @@ select {
   width: 100%;
   accent-color: #f59e0b;
   cursor: pointer;
+}
+
+.number-field {
+  display: grid;
+  gap: 8px;
+}
+
+.number-field span {
+  color: #94a3b8;
+  font-size: 0.92rem;
+}
+
+.weeks-input {
+  width: 100%;
+  border: 1px solid rgba(148, 163, 184, 0.24);
+  border-radius: 14px;
+  background: rgba(15, 23, 42, 0.88);
+  color: #f8fafc;
+  padding: 0.8rem 0.95rem;
+}
+
+.weeks-input:focus {
+  outline: 2px solid rgba(94, 234, 212, 0.55);
+  outline-offset: 2px;
+}
+
+.helper-text {
+  margin: 0;
+  color: #94a3b8;
+  font-size: 0.92rem;
 }
 
 .nav-button {
@@ -233,7 +263,7 @@ select {
 
 .chart-wrap {
   position: relative;
-  min-height: 380px;
+  min-height: 340px;
 }
 
 .chart-tooltip {
